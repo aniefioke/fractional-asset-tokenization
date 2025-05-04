@@ -146,3 +146,70 @@
         (<= duration MAX-DURATION)
     )
 )
+
+;; Validate that a KYC level is within acceptable limits
+(define-private (validate-kyc-level (level uint))
+    (<= level MAX-KYC-LEVEL)
+)
+
+;; Validate that an expiry is within acceptable limits
+(define-private (validate-expiry (expiry uint))
+    (and 
+        (> expiry stacks-block-height)
+        (<= (- expiry stacks-block-height) MAX-EXPIRY)
+    )
+)
+
+;; Validate that a vote count threshold is reasonable
+(define-private (validate-minimum-votes (vote-count uint))
+    (and 
+        (> vote-count u0)
+        (<= vote-count tokens-per-asset)
+    )
+)
+
+;; Validate that a metadata URI is properly formed
+(define-private (validate-metadata-uri (uri (string-ascii 256)))
+    (and 
+        (> (len uri) u0)
+        (<= (len uri) u256)
+    )
+)
+
+;; Public Functions
+
+;; Register a new asset for tokenization
+(define-public (register-asset 
+    (metadata-uri (string-ascii 256)) 
+    (asset-value uint))
+    (begin
+        (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+        (asserts! (validate-metadata-uri metadata-uri) err-invalid-uri)
+        (asserts! (validate-asset-value asset-value) err-invalid-value)
+
+        (let 
+            ((asset-id (get-next-asset-id)))
+            ;; Set the new assets data
+            (map-set assets
+                { asset-id: asset-id }
+                {
+                    owner: contract-owner,
+                    metadata-uri: metadata-uri,
+                    asset-value: asset-value,
+                    is-locked: false,
+                    creation-height: stacks-block-height,
+                    last-price-update: stacks-block-height,
+                    total-dividends: u0
+                }
+            )
+            ;; Set initial token balance for the asset owner
+            (map-set token-balances
+                { owner: contract-owner, asset-id: asset-id }
+                { balance: tokens-per-asset }
+            )
+            ;; Increment the last-asset-id variable
+            (var-set last-asset-id asset-id)
+            (ok asset-id)
+        )
+    )
+)
